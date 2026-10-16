@@ -1,9 +1,10 @@
 // Offline-first app shell. Bump VERSION on every release so clients pick up new files.
-const VERSION = "narrative-v2.1.0";
+const VERSION = "narrative-v2.2.0";
 const SHELL = [
-  "./", "index.html", "output.html", "manifest.webmanifest",
-  "css/app.css", "css/stage.css",
+  "./", "index.html", "output.html", "remote.html", "manifest.webmanifest",
+  "css/app.css", "css/stage.css", "css/remote.css",
   "js/app.js", "js/output.js", "js/stage.js", "js/db.js", "js/bible.js", "js/scripture.js", "js/song.js",
+  "js/remote.js", "js/remote-link.js", "js/vendor/qrcode.mjs",
   "fonts/plex-400.woff2", "fonts/plex-500.woff2", "fonts/plex-600.woff2", "fonts/literata-600.woff2",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png",
 ];

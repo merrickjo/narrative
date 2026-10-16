@@ -139,3 +139,13 @@ button.primary-soft{background:var(--accent-soft);border-color:var(--accent-soft
 .kbd-table{border-collapse:collapse;font-size:13px}
 .kbd-table td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .kbd-table td:first-child{white-space:nowrap}
+
+/* ───── v2.2: remote ───── */
+.switch{display:flex;gap:8px;align-items:center;font-weight:500}
+.switch input{width:auto}
+.remote-body{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.qr{background:#fff;padding:8px;border-radius:10px;line-height:0}
+.qr svg{width:200px;height:200px;display:block}
+.code{font:600 30px/1.1 "IBM Plex Sans",ui-monospace,monospace;letter-spacing:.12em}
+details.note summary{cursor:pointer;margin-top:4px}
+details.note input{margin-top:4px}

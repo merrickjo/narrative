@@ -44,6 +44,15 @@ Type a reference in Indonesian or English: `Yoh 3:16`, `Yohanes 3:16-18`, `John 
 
 Before the service, press **Save session**. It re-caches the app, asks the browser to keep your data, and checks that every song and passage in the service order is stored on the device. A green **Offline ready ✓** chip means the whole service runs with no internet: songs, passages already in the order, fonts and the projector window. Only *new* ESV lookups need internet. If you edit the order afterwards, the chip turns amber until you save again.
 
+## Remote: run it from an iPad or phone
+
+Click **Remote** on the laptop, turn on **Allow remote control**, and scan the QR code with the iPad's camera (or open `…/narrative/remote.html` and type the 10-character code). The iPad becomes a presenter view: Live and Next up previews, the service order, every slide, section buttons, and big **Prev / Black / Clear / Next** buttons. A Bluetooth clicker or keyboard paired to the iPad works too. Every tap changes the laptop and the projector, and changes made on the laptop show on the iPad. The iPad screen stays awake while it's open.
+
+- **Any network.** The two devices don't need to share Wi-Fi: church Wi-Fi + mobile data is fine. Both just need internet. (The laptop itself still runs fully offline; only the remote link needs a connection.)
+- **How.** Messages pass through a public relay ([ntfy.sh](https://ntfy.sh)), encrypted end-to-end with a key made from the pairing code (AES-GCM, HKDF). The relay sees only random topic names and ciphertext. The code lives in the link's `#fragment`, which browsers never send to any server.
+- **Security.** Anyone with the code can control the screen. **New code** disconnects every paired device. You can point it at your own relay under *Remote → Privacy & relay*.
+- **Speed.** Typically well under a second each way.
+
 ## Your data
 
 Songs, service order, settings and imported Bibles live in the browser's **IndexedDB** on that machine. Use **Export** for a backup JSON and **Import** to restore it or move to another computer. Backups from the earlier single-file version import too.

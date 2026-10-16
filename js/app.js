@@ -3,6 +3,8 @@ import { paint, stageHTML, DEFAULT_SETTINGS } from "./stage.js";
 import { parseRef, formatRef } from "./bible.js";
 import { ESV_ID, ESV_MAX_VERSES, fetchESV, lookupLocal, versesToSlides, normalizeBible } from "./scripture.js";
 import { songSlides, flowReport, parseFlow, findSection, codeName, HOTKEYS } from "./song.js";
+import { Link, newCode, formatCode, DEFAULT_RELAY, seal } from "./remote-link.js";
+import qrcode from "./vendor/qrcode.mjs";
 
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -81,6 +83,7 @@ function paintAll(){
     $("#nextLabel").textContent = live.key ? "End of service order" : "";
   }
   renderFlowStrip();
+  queueRemoteState();
 }
 
 /**
@@ -454,6 +457,126 @@ function bindSettings(){
   $("#btnBgImgClear").onclick = () => { settings.bgImg = ""; $("#setBgImg").value = ""; saveSettings(); paintAll(); };
 }
 
+/* ───────────── remote control (host side) ───────────── */
+// This laptop stays the single source of truth. A paired device sends commands; we apply them through the
+// same functions as the keyboard, then broadcast a compact state snapshot it renders as a presenter view.
+let remoteCfg = { enabled: false, code: "", relay: DEFAULT_RELAY };
+let link = null, remoteSeen = 0, remoteDevice = "", remoteTimer = null, lastCmdIds = [];
+
+const slidePayload = s => !s ? null : s.kind === "scripture"
+  ? { k: "p", v: s.verses, cap: s.caption || "" }
+  : { k: "s", t: s.text };
+
+function remoteState(lean = false){
+  const nx = target(1), slides = slidesOf(view);
+  return {
+    t: "state", ts: Date.now(),
+    items: schedule.map(i => ({ u: i.uid, n: titleOf({ kind: "item", uid: i.uid }), k: i.type === "song" ? "s" : "p" })),
+    view: view ? {
+      key: viewKey(view), u: view.kind === "item" ? view.uid : null, n: titleOf(view),
+      s: slides.map(sl => ({ l: sl.label || "", c: sl.code || "", st: sl.sectionStart ? 1 : 0,
+        ...(lean ? { k: sl.kind === "scripture" ? "p" : "s", t: (sl.text || sl.verses?.[0]?.t || "").split("\n")[0].slice(0, 60) } : slidePayload(sl)) })),
+    } : null,
+    live: { key: live.key, i: live.idx, sl: slidePayload(live.slides[live.idx]), l: describe(live.slides[live.idx]), b: live.black, c: live.clear },
+    next: nx ? { sl: slidePayload(nx.slide), same: nx.sameView, n: nx.title, l: describe(nx.slide) } : null,
+    st: { fg: settings.fg, bg: settings.bg, font: settings.font, max: settings.max, pad: settings.pad },
+  };
+}
+function queueRemoteState(){
+  if (!link) return;
+  clearTimeout(remoteTimer);
+  remoteTimer = setTimeout(sendRemoteState, 120);         // coalesce bursts of key presses into one message
+}
+async function sendRemoteState(){
+  if (!link) return;
+  let st = remoteState();
+  if ((await seal(link.key, st)).length > 3900) st = remoteState(true);   // very long items: send first lines only
+  link.send(st, { cache: true, replaceable: true });
+}
+
+function onRemoteMessage(m){
+  if (!m || m.t !== "cmd") return;
+  if (m.id){ if (lastCmdIds.includes(m.id)) return; lastCmdIds = [...lastCmdIds.slice(-30), m.id]; }
+  remoteSeen = Date.now(); if (m.dev) remoteDevice = m.dev;
+  switch (m.c){
+    case "hello": case "ping": break;
+    case "step": step(m.d > 0 ? 1 : -1); break;
+    case "live": if (m.key === viewKey(view)) goLive(m.i); break;
+    case "item": { const it = item(m.u); if (it){ select({ kind: "item", uid: it.uid }); if (m.go) goLive(0); } break; }
+    case "sec": jumpSection(String(m.w || ""), String(m.w || "")); break;
+    case "black": toggleBlack(); break;
+    case "clear": toggleClear(); break;
+  }
+  if (m.c === "hello" || m.c === "ping") sendRemoteState();
+  updateRemoteChip();
+}
+
+async function startRemote(){
+  stopRemote();
+  if (!remoteCfg.enabled || !remoteCfg.code) return updateRemoteChip();
+  link = new Link({ code: remoteCfg.code, role: "host", relay: remoteCfg.relay || DEFAULT_RELAY,
+                    onMessage: onRemoteMessage, onStatus: () => { updateRemoteChip(); renderRemoteDialog(); } });
+  await link.start();
+  sendRemoteState();
+}
+function stopRemote(){ if (link){ link.close(); link = null; } }
+const saveRemote = () => db.put("kv", remoteCfg, "remote");
+
+function updateRemoteChip(){
+  const chip = $("#remoteChip");
+  if (!remoteCfg.enabled){ chip.hidden = true; return; }
+  const age = Date.now() - remoteSeen, live = age < 45000;
+  chip.hidden = false;
+  chip.className = "chip " + (live ? "ok" : link && link.status !== "online" ? "warn" : "");
+  chip.textContent = live ? `Remote ● ${remoteDevice || "connected"}`
+    : link && link.status !== "online" ? `Remote · ${link.status}` : "Remote · waiting";
+}
+setInterval(() => { updateRemoteChip(); if ($("#remote").open) renderRemoteDialog(); }, 3000);
+setInterval(() => { if (link && Date.now() - remoteSeen < 20 * 60000) sendRemoteState(); }, 25000);   // heartbeat while a remote is around
+
+function remoteURL(){
+  const u = new URL("remote.html", location.href);
+  u.hash = "c=" + remoteCfg.code + (remoteCfg.relay && remoteCfg.relay !== DEFAULT_RELAY ? "&r=" + encodeURIComponent(remoteCfg.relay) : "");
+  return u.href;
+}
+function renderRemoteDialog(){
+  $("#rmEnabled").checked = remoteCfg.enabled;
+  $("#rmBody").hidden = !remoteCfg.enabled;
+  $("#rmRelay").value = remoteCfg.relay === DEFAULT_RELAY ? "" : remoteCfg.relay;
+  $("#rmRelayName").textContent = new URL(remoteCfg.relay || DEFAULT_RELAY).host;
+  if (!remoteCfg.enabled) return;
+  const url = remoteURL();
+  if ($("#rmQr").dataset.url !== url){
+    const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    $("#rmQr").innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    $("#rmQr").dataset.url = url;
+  }
+  $("#rmCode").textContent = formatCode(remoteCfg.code);
+  $("#rmHost").textContent = new URL("remote.html", location.href).href.replace(/^https?:\/\//, "");
+  const age = Date.now() - remoteSeen;
+  $("#rmStatus").textContent = !link ? "Starting…"
+    : link.status !== "online" ? `Relay: ${link.status}. Check this laptop's internet.`
+    : age < 45000 ? `Connected: ${remoteDevice || "remote"} · last heard ${Math.round(age / 1000)}s ago`
+    : "Relay online. Waiting for a device to connect.";
+}
+$("#btnRemote").onclick = () => { renderRemoteDialog(); $("#remote").showModal(); };
+$("#rmEnabled").onchange = async e => {
+  remoteCfg.enabled = e.target.checked;
+  if (remoteCfg.enabled && !remoteCfg.code) remoteCfg.code = newCode();
+  await saveRemote(); await startRemote(); renderRemoteDialog();
+};
+$("#rmNew").onclick = async () => {
+  if (!confirm("Make a new code? Any paired iPad or phone will be disconnected.")) return;
+  remoteCfg.code = newCode(); remoteSeen = 0; remoteDevice = "";
+  await saveRemote(); await startRemote(); renderRemoteDialog();
+};
+$("#rmCopy").onclick = async () => { try { await navigator.clipboard.writeText(remoteURL()); toast("Remote link copied."); } catch { prompt("Copy this link:", remoteURL()); } };
+$("#rmRelay").onchange = async e => {
+  const v = e.target.value.trim().replace(/\/+$/, "");
+  remoteCfg.relay = v && /^https:\/\//.test(v) ? v : DEFAULT_RELAY;
+  await saveRemote(); await startRemote(); renderRemoteDialog();
+};
+
 /* ───────────── save session (offline readiness) ───────────── */
 // Everything in the service order already lives in IndexedDB, and passages store their text when added.
 // This makes that explicit: re-cache the app, ask for persistent storage, and verify every item resolves locally.
@@ -637,6 +760,7 @@ async function boot(){
   $("#preview").innerHTML = stageHTML();
   $("#nextPreview").innerHTML = stageHTML();
   sessionSaved = (await db.get("kv", "sessionSaved")) || null;
+  remoteCfg = { ...remoteCfg, ...((await db.get("kv", "remote")) || {}) };
   songs = await db.all("songs");
   schedule = (await db.get("kv", "schedule")) || [];
   settings = { ...DEFAULT_SETTINGS, ...((await db.get("kv", "settings")) || {}) };
@@ -659,6 +783,7 @@ async function boot(){
 
   $("#esvKey").value = esvKey;
   bindSettings(); renderVersions(); select(null);
+  startRemote();
   document.fonts?.ready.then(paintAll);
 }
 boot();

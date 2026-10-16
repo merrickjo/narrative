@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Narrative Remote</title>
+<meta name="theme-color" content="#141413">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Narrative">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/stage.css">
+<link rel="stylesheet" href="css/remote.css">
+</head>
+<body>
+
+<section id="pair" hidden>
+  <div class="pair-card">
+    <h1>Narrative Remote</h1>
+    <p>On the laptop running Narrative, click <b>Remote</b>, turn on <b>Allow remote control</b>, then scan the QR code with this device's camera, or type the code:</p>
+    <form id="pairForm">
+      <input id="pairCode" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XX" maxlength="12">
+      <button class="primary">Connect</button>
+    </form>
+    <p id="pairMsg" class="msg"></p>
+    <p class="fine">Works on any network: the laptop and this device only need internet. Messages are end-to-end encrypted.</p>
+  </div>
+</section>
+
+<section id="app" hidden>
+  <header>
+    <h1>Narrative <span>Remote</span></h1>
+    <span id="conn" class="chip">Connecting…</span>
+    <span class="sp"></span>
+    <button id="btnUnpair" class="ghost">Unpair</button>
+  </header>
+
+  <main>
+    <aside class="order">
+      <h2>Service order</h2>
+      <div id="items" class="items"></div>
+    </aside>
+
+    <div class="stagecol">
+      <div class="head"><h2>Live</h2><span id="liveLabel" class="live-label"></span></div>
+      <div class="screen" id="live"></div>
+      <div class="sections" id="sections"></div>
+      <div class="head"><h2>Next up</h2><span id="nextLabel" class="next-label"></span></div>
+      <div class="screen small" id="next"></div>
+    </div>
+
+    <div class="slidecol">
+      <div class="head"><h2 id="viewTitle">Nothing selected</h2></div>
+      <div id="slides" class="slides"></div>
+    </div>
+  </main>
+
+  <nav class="dock">
+    <button id="bPrev" aria-label="Previous">◀<span>Prev</span></button>
+    <button id="bBlack" aria-label="Black screen">Black</button>
+    <button id="bClear" aria-label="Clear text">Clear</button>
+    <button id="bNext" class="next" aria-label="Next">Next<span>▶</span></button>
+  </nav>
+</section>
+
+<script type="module" src="js/remote.js"></script>
+</body>
+</html>

@@ -18,7 +18,9 @@
   <span id="status" class="chip">Projector off</span>
   <span class="sp"></span>
   <span id="offlineChip" class="chip" hidden></span>
+  <span id="remoteChip" class="chip" hidden></span>
   <button id="btnInstall" hidden>Install app</button>
+  <button id="btnRemote" title="Control this laptop from an iPad or phone, on any network">Remote</button>
   <button id="btnSession" class="primary-soft" title="Make sure this service order works with no internet">Save session</button>
   <button id="btnImport">Import</button>
   <button id="btnExport">Export</button>
@@ -156,6 +158,32 @@
       <button type="button" id="btnSessionBackup">Also download a backup file</button>
       <span class="sp"></span><button class="primary">Done</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="remote">
+  <form method="dialog" class="prose-dialog">
+    <h3>Remote control</h3>
+    <p class="note">Run the service from an iPad or phone: it shows Live and Next up, and every tap there changes this laptop and the projector. Works on a different Wi-Fi or mobile data. Both devices just need internet.</p>
+    <label class="switch"><input type="checkbox" id="rmEnabled"> Allow remote control</label>
+    <div id="rmBody" class="remote-body" hidden>
+      <div class="qr" id="rmQr" aria-label="QR code to open the remote"></div>
+      <div class="stack">
+        <div class="note">On the iPad, scan this with the Camera, or open <b id="rmHost"></b> and type:</div>
+        <div class="code" id="rmCode"></div>
+        <div class="row">
+          <button type="button" id="rmCopy">Copy link</button>
+          <button type="button" id="rmNew" title="Disconnects any paired device">New code</button>
+        </div>
+        <div id="rmStatus" class="note"></div>
+      </div>
+    </div>
+    <details class="note">
+      <summary>Privacy &amp; relay</summary>
+      <p class="note">Messages pass through a public relay (<span id="rmRelayName">ntfy.sh</span>) but are encrypted end-to-end with a key made from the pairing code, so the relay can't read song or slide content. Anyone with the code can control the screen, so press <b>New code</b> if it leaks.</p>
+      <label class="note">Relay address <input id="rmRelay" placeholder="https://ntfy.sh"></label>
+    </details>
+    <div class="row"><span class="sp"></span><button class="primary">Done</button></div>
   </form>
 </dialog>
 
