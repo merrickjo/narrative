@@ -17,7 +17,9 @@
   <h1>Narrative</h1>
   <span id="status" class="chip">Projector off</span>
   <span class="sp"></span>
+  <span id="offlineChip" class="chip" hidden></span>
   <button id="btnInstall" hidden>Install app</button>
+  <button id="btnSession" class="primary-soft" title="Make sure this service order works with no internet">Save session</button>
   <button id="btnImport">Import</button>
   <button id="btnExport">Export</button>
   <button id="btnAbout">About</button>
@@ -80,12 +82,18 @@
       <button id="btnAddView" class="sm" hidden>＋ Service order</button>
       <button id="btnEdit" class="sm" hidden>Edit</button>
     </h2>
+    <div id="flowStrip" class="flow-strip" hidden></div>
     <div id="slides"></div>
   </section>
 
   <section id="right">
-    <h2>Live</h2>
-    <div class="preview" id="preview"></div>
+    <h2>Live <span class="sp"></span><span id="liveLabel" class="live-label"></span></h2>
+    <div class="preview-wrap">
+      <div class="preview" id="preview"></div>
+      <div id="hud" class="hud" aria-live="polite"></div>
+    </div>
+    <h2>Next up <span class="sp"></span><span id="nextLabel" class="next-label"></span></h2>
+    <div class="preview small" id="nextPreview"></div>
     <h2>Display</h2>
     <div class="settings">
       <label>Text<input type="color" id="setFg"></label>
@@ -104,9 +112,8 @@
       <button class="full" id="btnBgImgClear">Remove background image</button>
     </div>
     <div class="keys">
-      <kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd> next · <kbd>←</kbd> <kbd>PgUp</kbd> prev<br>
-      <kbd>1</kbd>–<kbd>9</kbd> jump · <kbd>B</kbd> black · <kbd>C</kbd> clear text<br>
-      End of a service-order item rolls on to the next one.
+      <kbd>→</kbd> next · <kbd>←</kbd> prev · <kbd>C</kbd> chorus · <kbd>V</kbd><kbd>2</kbd> verse 2 · <kbd>B</kbd> bridge<br>
+      <kbd>.</kbd> black · <kbd>X</kbd> clear text · <kbd>?</kbd> all shortcuts
     </div>
   </section>
 </main>
@@ -115,8 +122,8 @@
   <button id="btnPrev" title="Previous (←)">◀ Prev</button>
   <button id="btnNext" title="Next (→)">Next ▶</button>
   <span class="div"></span>
-  <button id="btnBlack" title="Black screen (B)">Black</button>
-  <button id="btnClear" title="Clear text (C)">Clear</button>
+  <button id="btnBlack" title="Black screen (. or Shift+B)">Black</button>
+  <button id="btnClear" title="Clear text (X)">Clear</button>
   <span class="div"></span>
   <button id="btnProjector" class="primary" title="Open the output on the projector">Projector</button>
 </div>
@@ -128,13 +135,46 @@
     <input id="edTitle" placeholder="Song title" required>
     <input id="edAuthor" placeholder="Author / CCLI (optional)">
     <textarea id="edLyrics" placeholder="[Verse 1]&#10;Line one&#10;Line two&#10;&#10;[Chorus]&#10;Line one&#10;Line two"></textarea>
-    <div class="note">A blank line starts a new slide. A line like <b>[Chorus]</b>, <b>Reff:</b> or <b>Bait 2</b> labels the slide and isn't projected.</div>
+    <div class="note">A blank line starts a new slide. A line like <b>[Chorus]</b>, <b>Reff:</b>, <b>Bait 2</b> or <b>[V1]</b> starts a section and isn't projected. Unlabeled slides belong to the section above them.</div>
+    <label class="flow-field">Flow <input id="edFlow" placeholder="e.g. V1 C V2 C B C C   (empty = as written)" autocomplete="off"></label>
+    <div class="note" id="edFlowReport"></div>
     <div class="row">
       <button type="button" id="edDelete">Delete</button>
       <span class="sp"></span>
       <button value="cancel" formnovalidate>Cancel</button>
       <button value="save" class="primary">Save</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="session">
+  <form method="dialog" class="prose-dialog">
+    <h3>Save session</h3>
+    <p class="note">Checks that everything in this service order can be shown with no internet.</p>
+    <ul id="sessionChecks" class="checks"></ul>
+    <div class="row">
+      <button type="button" id="btnSessionBackup">Also download a backup file</button>
+      <span class="sp"></span><button class="primary">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="shortcuts">
+  <form method="dialog" class="prose-dialog">
+    <h3>Keyboard shortcuts</h3>
+    <table class="kbd-table">
+      <tr><td><kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd> <kbd>↓</kbd></td><td>Next slide (rolls into the next service-order item)</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>PgUp</kbd> <kbd>↑</kbd></td><td>Previous slide</td></tr>
+      <tr><td><kbd>C</kbd></td><td>Chorus (next one in the flow)</td></tr>
+      <tr><td><kbd>V</kbd> then <kbd>2</kbd></td><td>Verse 2. <kbd>V</kbd> alone = next verse</td></tr>
+      <tr><td><kbd>P</kbd> <kbd>B</kbd> <kbd>T</kbd> <kbd>I</kbd> <kbd>E</kbd></td><td>Pre-chorus, Bridge, Tag, Intro, Ending</td></tr>
+      <tr><td><kbd>1</kbd><kbd>2</kbd> <kbd>Enter</kbd></td><td>Jump to slide number</td></tr>
+      <tr><td><kbd>.</kbd> or <kbd>⇧B</kbd></td><td>Black screen (toggle)</td></tr>
+      <tr><td><kbd>X</kbd> or <kbd>Esc</kbd></td><td>Clear text, keep background (toggle)</td></tr>
+      <tr><td><kbd>F</kbd> on the projector</td><td>Fullscreen on/off</td></tr>
+      <tr><td><kbd>?</kbd></td><td>This list</td></tr>
+    </table>
+    <div class="row"><span class="sp"></span><button class="primary">Close</button></div>
   </form>
 </dialog>
 

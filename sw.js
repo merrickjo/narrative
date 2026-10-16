@@ -1,9 +1,9 @@
 // Offline-first app shell. Bump VERSION on every release so clients pick up new files.
-const VERSION = "narrative-v2.0.0";
+const VERSION = "narrative-v2.1.0";
 const SHELL = [
   "./", "index.html", "output.html", "manifest.webmanifest",
   "css/app.css", "css/stage.css",
-  "js/app.js", "js/output.js", "js/stage.js", "js/db.js", "js/bible.js", "js/scripture.js",
+  "js/app.js", "js/output.js", "js/stage.js", "js/db.js", "js/bible.js", "js/scripture.js", "js/song.js",
   "fonts/plex-400.woff2", "fonts/plex-500.woff2", "fonts/plex-600.woff2", "fonts/literata-600.woff2",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png",
 ];
@@ -15,6 +15,19 @@ self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
+// "Save session": re-download the shell when online, then report what's in the cache.
+self.addEventListener("message", e => {
+  if (!e.data || e.data.t !== "precache" || !e.ports[0]) return;
+  e.waitUntil((async () => {
+    const cache = await caches.open(VERSION);
+    let refreshed = false;
+    try { await cache.addAll(SHELL.map(u => new Request(u, { cache: "reload" }))); refreshed = true; } catch {}
+    const missing = [];
+    for (const u of SHELL) if (!(await cache.match(u, { ignoreSearch: true }))) missing.push(u);
+    e.ports[0].postMessage({ total: SHELL.length, missing, refreshed });
+  })());
+});
+
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;   // ESV API etc. always go to the network

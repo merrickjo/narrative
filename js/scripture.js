@@ -18,7 +18,9 @@ export async function fetchESV(ref, key){
   });
   let res;
   try { res = await fetch("https://api.esv.org/v3/passage/text/?" + p, { headers: { Authorization: "Token " + key.trim() } }); }
-  catch { throw new Error("Couldn't reach api.esv.org — check the internet connection."); }
+  catch { throw new Error(navigator.onLine === false
+    ? "You're offline. New ESV lookups need internet; passages already in the service order still work."
+    : "Couldn't reach api.esv.org. Check the internet connection."); }
   if (res.status === 401 || res.status === 403) throw new Error("The ESV API rejected the key.");
   if (res.status === 429) throw new Error("ESV API rate limit hit — wait a minute and try again.");
   if (!res.ok) throw new Error("ESV API error " + res.status + ".");

@@ -36,10 +36,12 @@ addEventListener("keydown", e => {
     document.fullscreenElement ? document.exitFullscreen() : goFS();
     return;
   }
-  if (["ArrowRight","ArrowLeft","ArrowUp","ArrowDown","PageUp","PageDown"," ","b","B","c","C","."].includes(e.key) || /^[1-9]$/.test(e.key)){
+  if (e.key === "Escape" || e.metaKey || e.ctrlKey || e.altKey) return;   // Esc keeps its normal "exit fullscreen" job here
+  const nav = ["ArrowRight","ArrowLeft","ArrowUp","ArrowDown","PageUp","PageDown"," "].includes(e.key);
+  if (nav || /^[0-9]$/.test(e.key) || ["Enter","Backspace",".","?"].includes(e.key) || /^[vcpbtiex]$/i.test(e.key)){
     e.preventDefault();
-    goFS();                                   // a clicker press on this window also takes it fullscreen
-    ch.postMessage({ t: "key", key: e.key });
+    if (nav) goFS();                          // a clicker press on this window also takes it fullscreen
+    ch.postMessage({ t: "key", key: e.key, shift: e.shiftKey });
   }
 });
 

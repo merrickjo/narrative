@@ -96,3 +96,46 @@ dialog textarea{height:52vh;resize:vertical;line-height:1.5}
 .prose-dialog p{margin:0;color:var(--ink)}
 
 @media (max-width:1100px){ main{grid-template-columns:230px 200px 1fr 290px} }
+
+/* ───── v2.1: flow, next-up, HUD, session ───── */
+button.primary-soft{background:var(--accent-soft);border-color:var(--accent-soft);color:var(--accent);font-weight:500}
+.chip.warn{color:#a15c00;border-color:#a15c00}
+@media (prefers-color-scheme: dark){ .chip.warn{color:#f0a840;border-color:#f0a840} }
+
+.flow-strip{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 8px}
+.flow-strip .tok{font:600 12px/1 var(--ui);padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--mute);cursor:pointer}
+.flow-strip .tok.past{opacity:.55}
+.flow-strip .tok.now{background:var(--live);border-color:var(--live);color:#fff;opacity:1}
+.flow-strip .tok.next{border-color:var(--accent);color:var(--accent)}
+
+.slide .key{font:600 10px/1 var(--ui);padding:2px 5px;border-radius:4px;background:var(--ink);color:var(--bg);margin-right:5px}
+.slide.section-start{border-left-width:5px}
+.slide.next-up{border-style:dashed;border-color:var(--accent)}
+
+.preview-wrap{position:relative;margin:0 12px}
+.preview-wrap .preview{margin:0}
+.preview.small{width:62%;margin:0 12px 6px}
+.live-label,.next-label{font-size:11px;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-label{color:var(--live)}
+.next-label{color:var(--accent)}
+
+.hud{position:absolute;inset:8px 8px auto auto;padding:6px 12px;border-radius:8px;background:rgba(20,20,19,.9);color:#fff;
+     font:600 15px/1.2 var(--ui);opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;pointer-events:none}
+.hud.show{opacity:1;transform:none}
+.hud.miss{background:var(--live)}
+.hud .k{display:inline-block;min-width:1.4em;text-align:center;border:1px solid rgba(255,255,255,.5);border-radius:4px;padding:0 4px;margin-right:6px}
+
+.flow-field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+.flow-field input{flex:1;font-family:"IBM Plex Sans",ui-monospace,monospace;letter-spacing:.04em}
+#edFlowReport.err{color:var(--live)}
+
+.checks{list-style:none;margin:4px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.checks li{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.checks li .i{width:1.3em;flex:none;text-align:center;font-weight:700}
+.checks li.ok .i{color:#1d7a3e}
+.checks li.warn .i{color:#a15c00}
+.checks li.bad .i{color:var(--live)}
+.checks li small{display:block;color:var(--mute);font-size:12px}
+.kbd-table{border-collapse:collapse;font-size:13px}
+.kbd-table td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.kbd-table td:first-child{white-space:nowrap}

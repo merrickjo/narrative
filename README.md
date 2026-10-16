@@ -9,11 +9,26 @@ A browser-based worship presenter: song lyrics and scripture on the projector, c
 1. Connect the projector and set the display to **Extend**, not Mirror.
 2. Open Narrative and click **Projector** in the bottom bar. The first time, Chrome asks to *manage windows on all your displays*. Allow it, and the output window opens on the projector by itself.
 3. Click the output once (or press any slide key on it) to make it fullscreen. Browsers require that one gesture on the window itself.
-4. Drive from the laptop: click a slide, or use **→ / Space / PgDn** for next and **← / PgUp** for previous. **B** blacks the screen, **C** clears the text, **1–9** jumps to a slide. Presentation clickers work in either window. At the end of a service-order item, *Next* rolls on to the next item.
+4. Drive from the laptop: click a slide, or use **→ / Space / PgDn** for next and **← / PgUp** for previous. **Next up** (under Live) shows exactly what the next press will put on screen, including when it rolls into the next service-order item. Press **?** for every shortcut.
 
 ## Songs
 
-Type or paste the lyrics. A **blank line starts a new slide**. A first line like `[Chorus]`, `Verse 2:`, `Reff:` or `Bait 1` labels the slide and isn't projected. Each lyric line stays on one line on screen; the text shrinks to fit instead of wrapping mid-line. You can also import `.txt` files (one song per file, file name = title).
+Type or paste the lyrics. A **blank line starts a new slide**. A first line like `[Chorus]`, `Verse 2:`, `Reff:`, `Bait 1` or `[V1]` starts a **section** and isn't projected. Unlabeled slides belong to the section above them. Each lyric line stays on one line on screen; the text shrinks to fit instead of wrapping mid-line. You can also import `.txt` files (one song per file, file name = title).
+
+**Flow.** In the editor, set the order the band plays, e.g. `V1 C V2 C B C C`. Repeats are built in, so *Next* just follows the arrangement. Leave it empty to play as written. The editor flags flow codes that aren't in the lyrics.
+
+**Section hotkeys** (for when the worship leader goes off-script):
+
+| Key | Goes to |
+|---|---|
+| `C` | Chorus (the next one in the flow) |
+| `V` then `2` | Verse 2 (`V` alone = next verse) |
+| `P` `B` `T` `I` `E` | Pre-chorus, Bridge, Tag, Intro, Ending |
+| `1` `2` `Enter` | Slide 12 |
+| `.` or `Shift+B` | Black screen |
+| `X` or `Esc` | Clear text, keep background |
+
+Every keypress shows in the corner of the Live preview, and the flow strip above the slides lights up the current section in red and the next one in blue.
 
 ## Scripture
 
@@ -24,6 +39,10 @@ Type a reference in Indonesian or English: `Yoh 3:16`, `Yohanes 3:16-18`, `John 
   - `[ { "chapters": [["v1","v2",…], …] }, … ]`: 66 books in canonical order (or 27 for an NT-only file)
   - `{ "books": [ [["v1",…],…], … ] }`
   - `{ "verses": [ { "book": 43, "chapter": 3, "verse": 16, "text": "…" }, … ] }`
+
+## Offline: Save session
+
+Before the service, press **Save session**. It re-caches the app, asks the browser to keep your data, and checks that every song and passage in the service order is stored on the device. A green **Offline ready ✓** chip means the whole service runs with no internet: songs, passages already in the order, fonts and the projector window. Only *new* ESV lookups need internet. If you edit the order afterwards, the chip turns amber until you save again.
 
 ## Your data
 

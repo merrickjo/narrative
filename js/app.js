@@ -2,6 +2,7 @@ import { db, persist } from "./db.js";
 import { paint, stageHTML, DEFAULT_SETTINGS } from "./stage.js";
 import { parseRef, formatRef } from "./bible.js";
 import { ESV_ID, ESV_MAX_VERSES, fetchESV, lookupLocal, versesToSlides, normalizeBible } from "./scripture.js";
+import { songSlides, flowReport, parseFlow, findSection, codeName, HOTKEYS } from "./song.js";
 
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -23,27 +24,17 @@ const saveSettings = () => db.put("kv", settings, "settings");
 const song = id => songs.find(s => s.id === id);
 const item = u => schedule.find(i => i.uid === u);
 
-/* ───────────── lyrics → slides ───────────── */
-const LABEL = /^\s*(\[(.+)\]|((verse|chorus|bridge|pre-?chorus|intro|outro|tag|ending|reff?|refrain|interlude|bait|ayat|jembatan|coda)\s*\d*)\s*:?)\s*$/i;
-function lyricSlides(text){
-  const out = [];
-  for (const block of text.replace(/\r/g, "").split(/\n\s*\n/)){
-    let lines = block.split("\n").filter(l => l.trim());
-    let label = "";
-    if (lines.length && LABEL.test(lines[0])){ const m = lines[0].match(LABEL); label = (m[2] || m[3]).trim(); lines = lines.slice(1); }
-    if (lines.length) out.push({ kind: "song", label, text: lines.join("\n") });
-  }
-  return out;
-}
+/* ───────────── lyrics → slides (sections + flow live in song.js) ───────────── */
+const lyricSlides = s => songSlides(s);
 
 /* ───────────── what the centre panel shows ───────────── */
 const viewKey = v => !v ? null : v.kind === "song" ? "song:" + v.id : v.kind === "item" ? "item:" + v.uid : "scr:" + v.caption + "|" + v.slides.length;
 function slidesOf(v){
   if (!v) return [];
-  if (v.kind === "song") { const s = song(v.id); return s ? lyricSlides(s.lyrics) : []; }
+  if (v.kind === "song") { const s = song(v.id); return s ? lyricSlides(s) : []; }
   if (v.kind === "item") {
     const it = item(v.uid); if (!it) return [];
-    if (it.type === "song") { const s = song(it.songId); return s ? lyricSlides(s.lyrics) : []; }
+    if (it.type === "song") { const s = song(it.songId); return s ? lyricSlides(s) : []; }
     return it.slides;
   }
   return v.slides;
@@ -59,6 +50,8 @@ function titleOf(v){
 function frame(){
   return { slide: live.slides[live.idx] || null, black: live.black, clear: live.clear, settings };
 }
+const describe = s => !s ? "" : s.kind === "scripture" ? (s.caption || "Scripture") : (s.label || "Slide");
+
 function paintAll(){
   const f = frame();
   paint($("#preview .stage"), f);
@@ -66,8 +59,48 @@ function paintAll(){
   $("#btnBlack").classList.toggle("on", live.black);
   $("#btnClear").classList.toggle("on", live.clear);
   const vk = viewKey(view);
-  document.querySelectorAll(".slide").forEach(el => el.classList.toggle("live", vk === live.key && +el.dataset.i === live.idx));
+  const nx = target(1);
+  document.querySelectorAll(".slide").forEach(el => {
+    const i = +el.dataset.i;
+    el.classList.toggle("live", vk === live.key && i === live.idx);
+    el.classList.toggle("next-up", !!nx && nx.sameView && i === nx.idx);
+  });
   document.querySelectorAll("#schedule .item").forEach(el => el.classList.toggle("live", live.key === "item:" + el.dataset.uid));
+
+  // Live label: what the room sees right now
+  const cur = live.slides[live.idx];
+  $("#liveLabel").textContent = live.black ? "BLACK" : live.clear ? "TEXT CLEARED" : describe(cur);
+
+  // Next up: exactly what one press of Next will show (including roll-over into the next item)
+  const np = $("#nextPreview .stage");
+  if (nx){
+    paint(np, { slide: nx.slide, black: false, clear: false, settings });
+    $("#nextLabel").textContent = (nx.sameView ? "" : "Next item · " + nx.title + " · ") + describe(nx.slide);
+  } else {
+    paint(np, { slide: null, black: false, clear: false, settings });
+    $("#nextLabel").textContent = live.key ? "End of service order" : "";
+  }
+  renderFlowStrip();
+}
+
+/**
+ * Where Next/Prev would land, without moving: { view, idx, slide, sameView, title } or null.
+ * Follows the slides shown in the centre panel; at the end of a service-order item it rolls into the neighbour.
+ */
+function target(dir){
+  if (!view) return null;
+  const slides = slidesOf(view);
+  const here = live.key === viewKey(view) ? live.idx : -1;
+  let idx = here === -1 ? 0 : here + dir;
+  if (idx >= 0 && idx < slides.length) return { view, idx, slide: slides[idx], sameView: true, title: titleOf(view) };
+  if (view.kind === "item" && here !== -1){
+    const i = schedule.findIndex(x => x.uid === view.uid) + dir;
+    if (i >= 0 && i < schedule.length){
+      const v = { kind: "item", uid: schedule[i].uid }, s = slidesOf(v);
+      if (s.length){ const j = dir > 0 ? 0 : s.length - 1; return { view: v, idx: j, slide: s[j], sameView: false, title: titleOf(v) }; }
+    }
+  }
+  return null;
 }
 function goLive(idx){
   const slides = slidesOf(view);
@@ -77,20 +110,52 @@ function goLive(idx){
   document.querySelector(`.slide[data-i="${live.idx}"]`)?.scrollIntoView({ block: "nearest" });
 }
 function step(dir){
+  const t = target(dir);
+  if (!t) return hud(dir > 0 ? "End of service order" : "Start", true);
+  if (!t.sameView) select(t.view);
+  goLive(t.idx);
+}
+
+/* ───────────── section hotkeys + HUD ───────────── */
+let hudTimer;
+function hud(html, miss = false, ms = 1400){
+  const h = $("#hud");
+  h.innerHTML = html; h.classList.toggle("miss", miss); h.classList.add("show");
+  clearTimeout(hudTimer); if (ms) hudTimer = setTimeout(() => h.classList.remove("show"), ms);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+
+function jumpSection(want, keyLabel){
   const slides = slidesOf(view);
+  if (!slides.length || slides[0].kind !== "song") return hud(`<span class="k">${esc(keyLabel)}</span>Sections work on songs`, true);
   const here = live.key === viewKey(view) ? live.idx : -1;
-  const next = here + dir;
-  // Roll over into the neighbouring service-order item.
-  if (view && view.kind === "item" && (next >= slides.length || next < 0) && here !== -1){
-    const i = schedule.findIndex(x => x.uid === view.uid) + dir;
-    if (i >= 0 && i < schedule.length){
-      select({ kind: "item", uid: schedule[i].uid });
-      const s = slidesOf(view);
-      return goLive(dir > 0 ? 0 : s.length - 1);
-    }
-  }
-  if (here === -1 && dir < 0) return goLive(0);
-  goLive(next);
+  const i = findSection(slides, want, here);
+  if (i < 0) return hud(`<span class="k">${esc(keyLabel)}</span>No ${esc(codeName(want))} in this song`, true, 1800);
+  goLive(i);
+  hud(`<span class="k">${esc(keyLabel)}</span>${esc(slides[i].label || codeName(slides[i].code))}`);
+}
+
+function renderFlowStrip(){
+  const strip = $("#flowStrip");
+  const slides = slidesOf(view);
+  if (!slides.length || slides[0].kind !== "song" || !slides.some(s => s.label)){ strip.hidden = true; return; }
+  // One chip per section occurrence, in play order
+  const here = live.key === viewKey(view) ? live.idx : -1;
+  const nx = target(1);
+  const chips = [];
+  slides.forEach((s, i) => { if (s.sectionStart) chips.push({ i, code: s.code, name: s.label.replace(/ \(\d+\/\d+\)/, ""), occ: s.occ }); });
+  strip.replaceChildren(...chips.map((c, k) => {
+    const end = k + 1 < chips.length ? chips[k + 1].i : slides.length;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tok"; b.title = c.name; b.tabIndex = -1;
+    b.textContent = c.code.startsWith("X") ? (c.name || "·") : c.code;
+    if (here >= c.i && here < end) b.classList.add("now");
+    else if (here >= end) b.classList.add("past");
+    if (nx && nx.sameView && nx.idx === c.i && !(here >= c.i && here < end)) b.classList.add("next");
+    b.onclick = () => goLive(c.i);
+    return b;
+  }));
+  strip.hidden = false;
 }
 
 ch.onmessage = e => {
@@ -98,7 +163,7 @@ ch.onmessage = e => {
   if (m.t === "hello") { outSeen = Date.now(); paintAll(); }
   else if (m.t === "alive") { outSeen = Date.now(); outFS = m.fs; }
   else if (m.t === "bye") { outSeen = 0; }
-  else if (m.t === "key") handleKey({ key: m.key, target: document.body, preventDefault(){} });
+  else if (m.t === "key") handleKey({ key: m.key, shiftKey: !!m.shift, target: document.body, preventDefault(){} });
   updateStatus();
 };
 function updateStatus(){
@@ -183,6 +248,7 @@ function renderSchedule(){
     el.append(d);
   });
   paintAll();
+  updateOfflineChip();
 }
 function renderSlides(){
   const el = $("#slides"); el.replaceChildren();
@@ -193,7 +259,12 @@ function renderSlides(){
   slidesOf(view).forEach((sl, i) => {
     const d = document.createElement("div"); d.className = "slide"; d.dataset.i = i;
     const lbl = document.createElement("div"); lbl.className = "lbl";
-    const a = document.createElement("span"); a.textContent = sl.label || "";
+    const a = document.createElement("span");
+    if (sl.kind === "song" && sl.sectionStart && sl.code && !sl.code.startsWith("X")){
+      const k = document.createElement("span"); k.className = "key"; k.textContent = sl.code; k.title = `Hotkey: ${sl.code.split("").join(" then ")}`;
+      a.append(k); d.classList.add("section-start");
+    }
+    a.append(sl.label || "");
     const b = document.createElement("span"); b.textContent = i + 1;
     lbl.append(a, b);
     const body = document.createElement("div"); body.className = "b";
@@ -282,16 +353,31 @@ let editingId = null;
 function openEditor(id){
   editingId = id; const s = id ? song(id) : null;
   $("#edTitle").value = s?.title || ""; $("#edAuthor").value = s?.author || ""; $("#edLyrics").value = s?.lyrics || "";
-  $("#edDelete").hidden = !s; $("#editor").showModal(); $("#edTitle").focus();
+  $("#edFlow").value = s?.flow || "";
+  $("#edDelete").hidden = !s; updateFlowReport(); $("#editor").showModal(); $("#edTitle").focus();
 }
+function updateFlowReport(){
+  const r = flowReport({ lyrics: $("#edLyrics").value, flow: $("#edFlow").value });
+  const el = $("#edFlowReport");
+  const probs = [];
+  if (r.unknown.length) probs.push(`not a section: ${r.unknown.join(", ")}`);
+  if (r.missing.length) probs.push(`not in the lyrics: ${r.missing.join(", ")}`);
+  el.className = "note" + (probs.length ? " err" : "");
+  el.textContent = (r.sections.length ? `Sections: ${r.sections.join(" · ")}` : "No sections yet.") + (probs.length ? `. Flow ${probs.join("; ")}` : "");
+}
+$("#edLyrics").addEventListener("input", updateFlowReport);
+$("#edFlow").addEventListener("input", updateFlowReport);
 $("#editor").addEventListener("close", async () => {
   if ($("#editor").returnValue !== "save") return;
-  const data = { title: $("#edTitle").value.trim(), author: $("#edAuthor").value.trim(), lyrics: $("#edLyrics").value };
+  const data = { title: $("#edTitle").value.trim(), author: $("#edAuthor").value.trim(), lyrics: $("#edLyrics").value,
+                 flow: parseFlow($("#edFlow").value).codes.join(" ") };
   if (!data.title) return;
   let s = editingId && song(editingId);
   if (s) Object.assign(s, data); else { s = { id: uid(), ...data }; songs.push(s); }
   await db.put("songs", s);
-  if (live.key && live.key === viewKey(view)) live.slides = slidesOf(view);  // keep live text in sync after an edit
+  if (live.key && live.key === viewKey(view)){                                 // keep live text in sync after an edit
+    live.slides = slidesOf(view); live.idx = Math.min(live.idx, live.slides.length - 1);
+  }
   select(view && view.kind === "item" ? view : { kind: "song", id: s.id });
 });
 $("#edDelete").onclick = async () => {
@@ -307,13 +393,14 @@ function editCurrent(){
 }
 
 /* ───────────── import / export ───────────── */
-$("#btnExport").onclick = () => {
+$("#btnExport").onclick = () => downloadBackup();
+function downloadBackup(){
   const data = { app: "narrative", version: 2, exported: new Date().toISOString(), songs, schedule, settings };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = "narrative-backup-" + new Date().toISOString().slice(0, 10) + ".json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
+}
 $("#btnImport").onclick = () => $("#fileImport").click();
 $("#fileImport").onchange = async e => {
   let added = 0;
@@ -328,7 +415,7 @@ $("#fileImport").onchange = async e => {
           if (!s || !s.title || typeof s.lyrics !== "string") continue;
           const dup = songs.find(x => x.title === s.title && x.lyrics === s.lyrics);
           if (dup){ idMap[s.id] = dup.id; continue; }
-          const n = { id: uid(), title: s.title, author: s.author || "", lyrics: s.lyrics };
+          const n = { id: uid(), title: s.title, author: s.author || "", lyrics: s.lyrics, flow: typeof s.flow === "string" ? s.flow : "" };
           idMap[s.id] = n.id; songs.push(n); await db.put("songs", n); added++;
         }
         if (Array.isArray(data.schedule) && data.schedule.length && confirm("This backup includes a service order. Replace the current one?")){
@@ -367,16 +454,141 @@ function bindSettings(){
   $("#btnBgImgClear").onclick = () => { settings.bgImg = ""; $("#setBgImg").value = ""; saveSettings(); paintAll(); };
 }
 
+/* ───────────── save session (offline readiness) ───────────── */
+// Everything in the service order already lives in IndexedDB, and passages store their text when added.
+// This makes that explicit: re-cache the app, ask for persistent storage, and verify every item resolves locally.
+let sessionSaved = null;   // { at, sig }
+const sessionSig = () => JSON.stringify(schedule.map(i => i.type === "song"
+  ? [i.uid, song(i.songId)?.lyrics || null, song(i.songId)?.flow || ""] : [i.uid, i.slides.length]));
+
+function updateOfflineChip(){
+  const chip = $("#offlineChip");
+  if (!sessionSaved || !schedule.length){ chip.hidden = true; return; }
+  const fresh = sessionSaved.sig === sessionSig();
+  chip.hidden = false;
+  chip.className = "chip " + (fresh ? "ok" : "warn");
+  chip.textContent = fresh ? `Offline ready ✓ ${new Date(sessionSaved.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Changed since save. Save session again";
+}
+
+function askSW(msg, ms = 15000){
+  return new Promise(async resolve => {
+    const timer = setTimeout(() => resolve(null), ms);
+    try {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 4000))]);
+      if (!reg || !reg.active) { clearTimeout(timer); return resolve(null); }
+      const mc = new MessageChannel();
+      mc.port1.onmessage = e => { clearTimeout(timer); resolve(e.data); };
+      reg.active.postMessage(msg, [mc.port2]);
+    } catch { clearTimeout(timer); resolve(null); }
+  });
+}
+
+async function saveSession(){
+  const list = $("#sessionChecks"); list.replaceChildren();
+  const add = (state, text, detail = "") => {
+    const li = document.createElement("li"); li.className = state;
+    li.innerHTML = `<span class="i">${state === "ok" ? "✓" : state === "warn" ? "!" : "✕"}</span><span></span>`;
+    li.lastChild.textContent = text;
+    if (detail){ const s = document.createElement("small"); s.textContent = detail; li.lastChild.append(s); }
+    list.append(li); return state;
+  };
+  $("#session").showModal();
+  const results = [];
+
+  // 1. App files (pages, scripts, fonts, icons) in the offline cache
+  const sw = "serviceWorker" in navigator ? await askSW({ t: "precache" }) : null;
+  if (!sw) results.push(add("bad", "App files could not be cached for offline use.",
+    location.protocol === "file:" ? "Open Narrative from its web address (not a file) so it can work offline." : "Reload the page once while online, then try again."));
+  else if (sw.missing.length) results.push(add("bad", `${sw.missing.length} app file${sw.missing.length === 1 ? " is" : "s are"} missing from the offline cache.`, "Connect to the internet and press Save session again."));
+  else results.push(add("ok", `App works offline (${sw.total} files cached${sw.refreshed ? ", just refreshed" : ""}).`));
+
+  // 2. Persistent storage
+  let persisted = false;
+  try { persisted = (await navigator.storage?.persisted?.()) || (await persist()); } catch {}
+  results.push(persisted ? add("ok", "Browser storage is marked persistent.")
+    : add("warn", "The browser may clear storage if the disk gets full.", "Installing Narrative as an app (Install app button) usually fixes this. Keep a backup file too."));
+
+  // 3. Every service-order item is stored locally
+  if (!schedule.length) results.push(add("warn", "The service order is empty.", "Add songs and passages first, then save the session."));
+  else {
+    const broken = [], flowWarn = [];
+    let songsN = 0, passN = 0, esvVerses = 0;
+    for (const it of schedule){
+      if (it.type === "song"){
+        const s = song(it.songId);
+        if (!s || !songSlides(s).length){ broken.push(s ? s.title + " (no slides)" : "a deleted song"); continue; }
+        songsN++;
+        const r = flowReport(s); if (r.missing.length) flowWarn.push(`${s.title}: ${r.missing.join(", ")}`);
+      } else {
+        if (!it.slides?.length){ broken.push(it.title); continue; }
+        passN++;
+        if (it.version === ESV_ID) esvVerses += it.slides.reduce((n, sl) => n + sl.verses.length, 0);
+      }
+    }
+    results.push(broken.length ? add("bad", `${broken.length} item${broken.length === 1 ? "" : "s"} can't be shown.`, broken.join(", "))
+      : add("ok", `All ${schedule.length} items are stored on this device: ${songsN} song${songsN === 1 ? "" : "s"}, ${passN} passage${passN === 1 ? "" : "s"}.`,
+            passN ? "Passage text was saved when you added it; no internet needed to show it." : ""));
+    if (esvVerses) results.push(add(esvVerses <= ESV_MAX_VERSES ? "ok" : "bad", `ESV verses stored: ${esvVerses} of ${ESV_MAX_VERSES} allowed.`));
+    if (flowWarn.length) results.push(add("warn", "Some song flows name sections that aren't in the lyrics.", flowWarn.join(" · ")));
+  }
+  if (view?.kind === "scripture" && !schedule.some(i => i.type === "scripture" && i.title === view.caption))
+    results.push(add("warn", `"${view.caption}" is on screen but not in the service order.`, "Add it with ＋ Service order so it's saved."));
+  add(navigator.onLine ? "ok" : "warn", navigator.onLine ? "You're online, so the cache was refreshed with the latest version." : "You're offline right now. Checked what's already cached.");
+
+  if (!results.includes("bad") && schedule.length){
+    sessionSaved = { at: Date.now(), sig: sessionSig() };
+    await db.put("kv", sessionSaved, "sessionSaved");
+  }
+  updateOfflineChip();
+}
+
 /* ───────────── keys, buttons, misc ───────────── */
+// Two-key inputs ("V" then "2", or "1" "2" Enter) use a short buffer that's always visible in the HUD.
+let pending = null;   // { kind: "V" | "num", buf: "", timer }
+function clearPending(){ if (pending){ clearTimeout(pending.timer); $("#hud").classList.remove("show"); } pending = null; }
+function commitPending(){
+  const p = pending; clearPending();
+  if (!p) return;
+  if (p.kind === "V") return jumpSection(p.buf ? "V" + p.buf : "V", "V" + p.buf);
+  const n = +p.buf, total = slidesOf(view).length;
+  if (n >= 1 && n <= total){ goLive(n - 1); hud(`<span class="k">${n}</span>${esc(describe(slidesOf(view)[n - 1]) || "Slide " + n)}`); }
+  else hud(`<span class="k">${esc(p.buf)}</span>No slide ${esc(p.buf)}`, true);
+}
+function toggleBlack(){ live.black = !live.black; paintAll(); hud(live.black ? `<span class="k">.</span>Black screen` : "Screen back", false); }
+function toggleClear(){ live.clear = !live.clear; paintAll(); hud(live.clear ? `<span class="k">X</span>Text cleared` : "Text back", false); }
+
 function handleKey(e){
   const tag = e.target?.tagName || "";
   if (/INPUT|TEXTAREA|SELECT/.test(tag) || document.querySelector("dialog[open]")) return;
-  const k = e.key;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key, lower = k.length === 1 ? k.toLowerCase() : k;
+
+  if (/^[0-9]$/.test(k)){
+    e.preventDefault();
+    if (pending?.kind === "V" && !pending.buf){ pending.buf = k; return commitPending(); }
+    if (pending?.kind !== "num"){ if (k === "0") return; clearPending(); pending = { kind: "num", buf: "" }; }
+    pending.buf += k; clearTimeout(pending.timer);
+    const total = slidesOf(view).length;
+    if (+pending.buf * 10 > total) return commitPending();          // no longer number possible → jump now
+    hud(`<span class="k">${esc(pending.buf)}_</span>Enter to jump`, false, 0);
+    pending.timer = setTimeout(commitPending, 1100);
+    return;
+  }
+  if (k === "Enter" && pending){ e.preventDefault(); return commitPending(); }
+  if (k === "Backspace" && pending){ clearPending(); return hud("Cancelled"); }
+  if (pending) clearPending();                                      // any other key cancels a half-typed jump
+
   if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(k)){ e.preventDefault(); step(1); }
   else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(k)){ e.preventDefault(); step(-1); }
-  else if (k === "b" || k === "B" || k === "."){ live.black = !live.black; paintAll(); }
-  else if (k === "c" || k === "C"){ live.clear = !live.clear; paintAll(); }
-  else if (/^[1-9]$/.test(k)){ const n = slidesOf(view).length; if (+k <= n) goLive(+k - 1); }
+  else if (k === "." || (lower === "b" && e.shiftKey)) toggleBlack();
+  else if (lower === "x" || k === "Escape") toggleClear();
+  else if (k === "?") $("#shortcuts").showModal();
+  else if (lower === "v"){
+    pending = { kind: "V", buf: "" };
+    hud(`<span class="k">V_</span>Verse number? (or wait = next verse)`, false, 0);
+    pending.timer = setTimeout(commitPending, 900);
+  }
+  else if (HOTKEYS[lower]) jumpSection(HOTKEYS[lower], HOTKEYS[lower]);
 }
 document.addEventListener("keydown", handleKey);
 
@@ -395,8 +607,10 @@ document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
 $("#btnProjector").onclick = openProjector;
 $("#btnPrev").onclick = () => step(-1);
 $("#btnNext").onclick = () => step(1);
-$("#btnBlack").onclick = () => { live.black = !live.black; paintAll(); };
-$("#btnClear").onclick = () => { live.clear = !live.clear; paintAll(); };
+$("#btnBlack").onclick = toggleBlack;
+$("#btnClear").onclick = toggleClear;
+$("#btnSession").onclick = saveSession;
+$("#btnSessionBackup").onclick = () => downloadBackup();
 $("#btnNew").onclick = () => openEditor(null);
 $("#btnEdit").onclick = editCurrent;
 $("#btnAddView").onclick = addViewToSchedule;
@@ -421,6 +635,8 @@ const SAMPLE = { id: uid(), title: "Sample Song (edit me)", author: "",
 
 async function boot(){
   $("#preview").innerHTML = stageHTML();
+  $("#nextPreview").innerHTML = stageHTML();
+  sessionSaved = (await db.get("kv", "sessionSaved")) || null;
   songs = await db.all("songs");
   schedule = (await db.get("kv", "schedule")) || [];
   settings = { ...DEFAULT_SETTINGS, ...((await db.get("kv", "settings")) || {}) };
