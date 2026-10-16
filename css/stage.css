@@ -1,0 +1,11 @@
+@font-face{font-family:"IBM Plex Sans";font-weight:400;font-display:swap;src:url(../fonts/plex-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-weight:500;font-display:swap;src:url(../fonts/plex-500.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-weight:600;font-display:swap;src:url(../fonts/plex-600.woff2) format("woff2")}
+@font-face{font-family:"Literata";font-weight:600;font-display:swap;src:url(../fonts/literata-600.woff2) format("woff2")}
+
+.stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
+.stage .txt{font-weight:600;line-height:1.25;text-align:center}
+.stage .txt.lines{white-space:pre}
+.stage .txt.prose{white-space:normal;line-height:1.35;text-wrap:pretty}
+.stage .txt sup{font-size:.5em;font-weight:500;opacity:.75;margin-right:.15em;vertical-align:.7em;line-height:0}
+.stage .cap{position:absolute;left:0;right:0;text-align:center;font-weight:500;opacity:.85;letter-spacing:.02em}

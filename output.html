@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrative · Output</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/stage.css">
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  body.fs{cursor:none}
+  #gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+        background:rgba(0,0,0,.72);color:#ddd;font:500 22px/1.4 "IBM Plex Sans",system-ui,sans-serif;text-align:center;cursor:pointer;z-index:2}
+  #gate b{font-size:34px;color:#fff;font-weight:600}
+  #gate small{font-size:15px;color:#999;font-weight:400;max-width:32em}
+  body.fs #gate{display:none}
+</style>
+</head>
+<body>
+<div id="gate" role="button" tabindex="0">
+  <b>Click anywhere to go fullscreen</b>
+  <span id="where">This is the projector output.</span>
+  <small>Lyrics keep updating behind this message. Keys pressed here (→ ← Space PgUp PgDn B C) control the slides too, so a clicker works whichever window has focus.</small>
+</div>
+<div id="screen"></div>
+<script type="module" src="js/output.js"></script>
+</body>
+</html>

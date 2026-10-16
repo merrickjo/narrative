@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrative</title>
+<meta name="description" content="Browser-based worship lyrics and scripture presenter.">
+<meta name="theme-color" content="#141413">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/stage.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header>
+  <h1>Narrative</h1>
+  <span id="status" class="chip">Projector off</span>
+  <span class="sp"></span>
+  <button id="btnInstall" hidden>Install app</button>
+  <button id="btnImport">Import</button>
+  <button id="btnExport">Export</button>
+  <button id="btnAbout">About</button>
+  <input type="file" id="fileImport" accept=".json,.txt" multiple hidden>
+</header>
+
+<main>
+  <section id="left">
+    <nav class="tabs">
+      <button data-tab="songs" class="active">Songs</button>
+      <button data-tab="scripture">Scripture</button>
+    </nav>
+
+    <div class="tab" id="tab-songs">
+      <div class="pad row">
+        <input id="search" placeholder="Search title or lyrics…">
+        <button id="btnNew" title="New song">＋</button>
+      </div>
+      <div class="list" id="library"></div>
+    </div>
+
+    <div class="tab" id="tab-scripture" hidden>
+      <form class="pad stack" id="refForm">
+        <input id="refInput" placeholder="Yoh 3:16 · John 3:16-18 · Mzm 23" autocomplete="off">
+        <div class="row">
+          <select id="refVersion" title="Version"></select>
+          <select id="refPer" title="Verses per slide">
+            <option value="0">Auto fit</option>
+            <option value="1">1 verse / slide</option>
+            <option value="2">2 verses / slide</option>
+            <option value="3">3 verses / slide</option>
+          </select>
+        </div>
+        <button class="primary">Show passage</button>
+        <div id="refMsg" class="msg"></div>
+      </form>
+      <div class="pad stack">
+        <h3>Versions</h3>
+        <div id="bibleList" class="mini-list"></div>
+        <button id="btnImportBible">Import a Bible (JSON)…</button>
+        <input type="file" id="fileBible" accept=".json" hidden>
+        <h3>ESV API key</h3>
+        <div class="row">
+          <input id="esvKey" type="password" placeholder="Paste key from api.esv.org" autocomplete="off">
+          <button id="btnEsvSave">Save</button>
+        </div>
+        <p class="note">Stored only in this browser. Never committed, never sent anywhere except api.esv.org.</p>
+        <p class="note">ESV® text © Crossway. <a href="https://www.esv.org" target="_blank" rel="noopener">esv.org</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Service order <span class="sp"></span><button id="btnClearSched" class="sm">Clear</button></h2>
+    <div class="list" id="schedule"></div>
+  </section>
+
+  <section>
+    <h2><span id="viewTitle">Nothing selected</span><span class="sp"></span>
+      <button id="btnAddView" class="sm" hidden>＋ Service order</button>
+      <button id="btnEdit" class="sm" hidden>Edit</button>
+    </h2>
+    <div id="slides"></div>
+  </section>
+
+  <section id="right">
+    <h2>Live</h2>
+    <div class="preview" id="preview"></div>
+    <h2>Display</h2>
+    <div class="settings">
+      <label>Text<input type="color" id="setFg"></label>
+      <label>Background<input type="color" id="setBg"></label>
+      <label class="full">Font
+        <select id="setFont">
+          <option value='"IBM Plex Sans", Arial, sans-serif'>IBM Plex Sans</option>
+          <option value='Arial, Helvetica, sans-serif'>Arial</option>
+          <option value='Georgia, "Times New Roman", serif'>Georgia</option>
+          <option value='"Literata", Georgia, serif'>Literata</option>
+        </select>
+      </label>
+      <label>Max size (px)<input type="number" id="setMax" min="20" max="300" step="4"></label>
+      <label>Margin (%)<input type="number" id="setPad" min="0" max="25" step="1"></label>
+      <label class="full">Background image<input type="file" id="setBgImg" accept="image/*"></label>
+      <button class="full" id="btnBgImgClear">Remove background image</button>
+    </div>
+    <div class="keys">
+      <kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd> next · <kbd>←</kbd> <kbd>PgUp</kbd> prev<br>
+      <kbd>1</kbd>–<kbd>9</kbd> jump · <kbd>B</kbd> black · <kbd>C</kbd> clear text<br>
+      End of a service-order item rolls on to the next one.
+    </div>
+  </section>
+</main>
+
+<div class="dock" role="toolbar" aria-label="Live controls">
+  <button id="btnPrev" title="Previous (←)">◀ Prev</button>
+  <button id="btnNext" title="Next (→)">Next ▶</button>
+  <span class="div"></span>
+  <button id="btnBlack" title="Black screen (B)">Black</button>
+  <button id="btnClear" title="Clear text (C)">Clear</button>
+  <span class="div"></span>
+  <button id="btnProjector" class="primary" title="Open the output on the projector">Projector</button>
+</div>
+
+<div id="toast" role="status"></div>
+
+<dialog id="editor">
+  <form method="dialog">
+    <input id="edTitle" placeholder="Song title" required>
+    <input id="edAuthor" placeholder="Author / CCLI (optional)">
+    <textarea id="edLyrics" placeholder="[Verse 1]&#10;Line one&#10;Line two&#10;&#10;[Chorus]&#10;Line one&#10;Line two"></textarea>
+    <div class="note">A blank line starts a new slide. A line like <b>[Chorus]</b>, <b>Reff:</b> or <b>Bait 2</b> labels the slide and isn't projected.</div>
+    <div class="row">
+      <button type="button" id="edDelete">Delete</button>
+      <span class="sp"></span>
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="about">
+  <form method="dialog" class="prose-dialog">
+    <h3>Narrative</h3>
+    <p>A browser-based lyrics and scripture presenter. Your songs, Bibles and settings live in this browser (IndexedDB). Use <b>Export</b> for backups.</p>
+    <p><b>Projector:</b> the first time, Chrome asks to “manage windows on all your displays”. Allow it, and Narrative opens the output on the second screen by itself.</p>
+    <h3>Scripture</h3>
+    <p>Scripture quotations marked “ESV” are from the ESV® Bible (The Holy Bible, English Standard Version®), © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved. ESV text is fetched live from <a href="https://www.esv.org" target="_blank" rel="noopener">esv.org</a>'s API with your own key, for non-commercial church use, at most 500 verses at a time.</p>
+    <p>Other versions are imported by you and stay on this device. No Bible text ships with this app.</p>
+    <div class="row"><span class="sp"></span><button class="primary">Close</button></div>
+  </form>
+</dialog>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
