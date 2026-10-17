@@ -184,4 +184,9 @@ addEventListener("keydown", e => {
 /* ───────── boot ───────── */
 const p = readPairing();
 p && validCode(p.code) ? connect(p) : showPair();
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator){
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
+  // The remote holds no state of its own (it re-syncs in ~0.1 s), so it can always reload on update.
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) location.reload(); });
+}

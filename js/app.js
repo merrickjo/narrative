@@ -716,9 +716,9 @@ function handleKey(e){
 document.addEventListener("keydown", handleKey);
 
 let toastTimer;
-function toast(text){
+function toast(text, ms = 4200){
   const t = $("#toast"); t.textContent = text; t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 4200);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), ms);
 }
 
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
@@ -750,7 +750,18 @@ addEventListener("resize", () => paint($("#preview .stage"), frame()));
 let installEvt = null;
 addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#btnInstall").hidden = false; });
 $("#btnInstall").onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("#btnInstall").hidden = true; };
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator){
+  // When a new version takes over, reload so the page and its code always match.
+  // Never during a service: if anything is live or the projector is open, just say so.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    const busy = live.key || Date.now() - outSeen < 4000;
+    if (busy) toast("Narrative was updated. Reload this page after the service to use the new version.", 12000);
+    else location.reload();
+  });
+}
 
 /* ───────────── boot ───────────── */
 const SAMPLE = { id: uid(), title: "Sample Song (edit me)", author: "",
